@@ -1938,7 +1938,7 @@ def decryptPostfixByteECB(function, block_size=16, offset=0, prev_bytes='', prev
     the plaintext (e.g., AES-ECB), and some data about the
     function (specified in the arg list) and optionally 
     some known bytes of the postfix, decrypts the next byte
-    of the postfix.
+    of the postfix without using the decryption key.
 
     Args:
         function (function: string -> string):  a function
@@ -1984,12 +1984,16 @@ def decryptPostfixByteECB(function, block_size=16, offset=0, prev_bytes='', prev
             return chr(k)
     return ''
 
-def decryptPostfixECB(function, verbose=True):
+# TODO: the displayed text in verbose mode isn't always aligned
+# well (in particular, it's misaligned when the postfix is 
+# tools.postfix.) find cause and fix
+def decryptPostfixECB(function, verbose=False):
     """ Given a function and assuming that it concatenates its
     input with a prefix and postfix, and then applies
     a block cipher such that each block of the ciphertext 
     depends only on the key and the corresponding block of
-    the plaintext (e.g., AES-ECB), decrypt the postfix.
+    the plaintext (e.g., AES-ECB), decrypt the postfix without
+    using the decryption key.
 
     Args:
         function (function: string -> string): a function which
