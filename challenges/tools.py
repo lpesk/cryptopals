@@ -9,13 +9,13 @@
 #     BadPad, InvalidFormat, InvalidMode, InvalidProfile,
 #     InvalidAssumptions
 # 2. Conversions between byte representations
-#     decode, encode
+#     decode, encode, decToLitEndHex
 # 3. Bitwise operations on strings
 #      XOR, hamDist
 # 4. Encryption and decryption functions
 #      repXOR, pad, stripPad, validatePadAES_CBC, 
 #      blockify, AES_ECB, AES_ECBFile, AES_CBC,
-#      newBlockAES_CBC, AES_CBCFile
+#      newBlockAES_CBC, AES_CBCFile, AES_CTR
 # 5. Toy applications
 #      encrOracle, ECBOracle, CBCOracle, quoteChars,   
 #      parseProfile, newProfile, newEncrProfile, 
@@ -33,9 +33,11 @@
 # iii. Attacks on AES-CBC
 #      forgeAuthString, paddingOracleByte, 
 #      paddingOracleBlock, paddingOracle, decryptSeries
+# iv. Attacks on RNGs
 
 import base64
 import random
+import time
 from Crypto.Cipher import AES
 from math import ceil
 from sys import stdout
@@ -180,6 +182,21 @@ def encode(msg_bytes, out_format='ascii'):
         msg = base64.b64encode(msg_bytes)
     return msg
 
+# TODO: this was written in the following very ugly way due to 
+# lack of patience for something better. Rewrite, preferably 
+# using encode/decode fns in some way!!
+def decToLitEndHex(n, pad_to_bytes=8):
+    assert (n >= 0), "Decimal number must be nonnegative"
+    big_end = hex(n)[2:]
+    if len(big_end) % 2 != 0:
+        big_end = '0' + big_end
+    pad = '0' * (2 * pad_to_bytes - len(big_end))
+    little_end = big_end[-2:]
+    for k in range(len(big_end)/2):
+        little_end += big_end[-2*(k + 1): -2*k]
+    pad_little_end = little_end + pad
+    return pad_little_end 
+
 ############ 3. Bitwise operations on strings ##############
 
 def XOR(msg1, msg2, in_format1='ascii', in_format2='ascii'):
@@ -245,6 +262,93 @@ def hamDist(msg1, msg2, in_format1='ascii', in_format2='ascii'):
     xor_bits = ''.join(bin(byt)[2:] for byt in xor_bytes)
     dist = sum([int(ch) for ch in xor_bits])
     return dist
+
+# TODO: test and document
+def mtNextWord(word, i):
+    word_len = 32
+    f = 1812433253
+    next_word = (f * ( word ^ (word >> (word_len - 2))) + i) & 0xFFFFFFFF
+    return next_word
+
+# TODO: test and document
+def mtInitialize(word):
+    state_words = 624
+    state = [word] + [0] * (state_words - 1)
+    for i in range(1, state_words):
+        state[i] = (mtNextWord(state[i - 1], i))
+    return state
+
+# TODO: test and document
+def mtTwist(word):
+    '''
+    Args:
+        word: a 32-bit integer
+
+    Returns:
+        twist: a 32-bit integer
+    '''
+    a = int('9908B0DF', 16)
+    twist = word >> 1
+    if word % 2:
+        twist = twist ^ a
+    return twist
+
+# TODO: test and document
+def mtTemper(word):
+    '''
+    Args:
+        word: a 32-bit integer
+
+    Returns:
+        tempered: a 32-bit integer
+    '''
+    U = 11
+    S = 7
+    T = 15
+    L = 18
+    B = int('9D2C5680', 16)
+    C = int('EFC60000', 16)
+    
+    x = word ^ (word >> U)
+    y = x ^ ((x << S) & B)
+    z = y ^ ((y << T) & C)
+    tempered = z ^ (z >> L)
+    return tempered
+
+# TODO: test and document
+def mtUntemper(tempered):
+    '''
+    Args:
+        tempered: a 32-bit integer, assumed to be the output of mtTemper() on some 32-bit input
+    
+    Returns:
+        word: a 32-bit integer which is the preimage of 'tempered' under mtTemper()
+    '''
+    U = 11
+    S = 7
+    T = 15
+    L = 18
+    B = int('9D2C5680', 16)
+    C = int('EFC60000', 16)
+
+    z = tempered ^ (tempered >> L)
+    y = z ^ ((z << T) & C) ^ ((z << 2*T) & (C << T) & C)
+    x = y ^ ((y << S) & B) ^ ((y << 2*S) & (B << S) & B) ^ ((y << 3*S) & (B << 2*S) & (B << S) & B) ^ ((y << 4*S) & (B << 3*S) & (B << 2*S) & (B << S) & B)
+    word = x ^ (x >> U) ^ (x >> 2*U)
+    return word
+
+class mt19937():  
+    def __init__(self, seed):
+        self.state = mtInitialize(seed)
+        self.index = 0
+    
+    def next(self):
+        state = self.state
+        index = self.index
+        new = state[(index + 397) % 624] ^ (mtTwist((state[index] & 0x80000000) ^ (state[(index + 1) % 624] & 0x7fffffff)))
+        self.state[index] = new
+        self.index = (index + 1) % 624
+        return mtTemper(new)
 
 ######## 4. Encryption and decryption functions #############
 
@@ -713,6 +817,43 @@ def AES_CBCFile(in_filename, key, iv, in_file_format='ascii', key_format='ascii'
     else:
         return out
 
+# TODO: clean up, document
+def AES_CTR(msg, key, nonce='0'*16, msg_format='ascii', key_format='ascii', nonce_format='hex'):    
+    msg_str = encode(decode(msg, msg_format), 'ascii')
+    num_full_blocks = len(msg_str) / 16
+    rem = len(msg_str) % 16
+    blocks = [msg_str[16*i: 16*(i + 1)] for i in range(num_full_blocks)]
+    if rem > 0:
+        blocks.append(msg_str[-rem:])
+
+    ctext = ''
+    ctr = 0
+    for block in blocks:
+        ctr_str = nonce + decToLitEndHex(ctr)
+        ctr_encr = AES_ECB(ctr_str, key, 'hex', key_format, 'encrypt', False)
+        if ctr < num_full_blocks:
+            ctext_block = XOR(ctr_encr, block, 'ascii', 'ascii')
+        else:
+            ctext_block = XOR(ctr_encr[0:rem], block, 'ascii', 'ascii')
+        ctext += ctext_block
+        ctr += 1
+
+    return str(ctext)
+
+# TODO: clean up, document. note that this works for both encryption and decryption
+def mt19937_CTR(msg, seed, msg_format='ascii'):
+    ctext = ''
+    ctr = 0
+    twister = mt19937(seed)
+    msg_bytes = encode(decode(msg, msg_format), 'ascii')
+    
+    for byt in msg_bytes:
+        # let key be the 8 least significant bits of the next output of twister
+        key = (twister.next() & 0xFF)
+        ctext += str(XOR(chr(key), byt, 'ascii', 'ascii'))
+
+    return ctext
+
 ################### 5. Toy applications ###################
 
 # TODO: it's convenient here to have different return types
@@ -1008,10 +1149,37 @@ def validateAuthString(msg):
     except IndexError:
         return False
 
+# TODO: document
+def mtGenerator():
+    time.sleep(random.randint(40, 1000))
+    timestamp = int(time.time())
+    twister = mt19937(timestamp)
+    time.sleep(random.randint(40, 1000))
+    return twister.next()
+
+# TODO: document
+def mt19937_CTR_Oracle(msg, msg_format='ascii'):
+    seed = random.randint(0, 2**16)
+    prefix_length = random.randint(0, 20)
+    prefix = randBytes(prefix_length)
+    msg_bytes = encode(decode(msg, msg_format), 'ascii')
+    ptext = prefix + msg_bytes
+    return mt19937_CTR(ptext, seed, msg_format)
+
+# TODO: document
+def mtPasswordReset(userid):
+    seed = (int(time.time()) & 0xFFFF)
+    prefix_length = random.randint(0, 20)
+    prefix = randBytes(prefix_length)
+    ptext = prefix + userid
+    return mt19937_CTR(ptext, seed, 'ascii')
+
 ############# 6. Tools for breaking stuff ##################
 # i.   Frequency analysis tools                            #
 # ii.  Attacks on AES-ECB                                  #
-# iii. Attacks on AES-CBC                                  # ############################################################
+# iii. Attacks on AES-CBC                                  #
+# iv.  Attacks on mt19937                                  #
+############################################################
 
 ############## 6.i Frequency analysis tools ################
 
@@ -1082,14 +1250,16 @@ def scoreText(msg, case=False, space=True):
         endpoints).
     """
     msg_len, score = 0, 0
-    str_counts = {' ': 0}
+    str_counts = {}
+    for char in ' .,;?!-':
+        str_counts[char] = 0
     for i in range(ord('a'), ord('z') + 1) + range(ord('A'), ord('Z') + 1):
         str_counts[chr(i)] = 0
     # count alpha chars and spaces
     # decrement score for each nonalpha/space char
     for char in msg:
         msg_len += 1
-        if char.isalpha() or char == ' ':
+        if char.isalpha() or char in ' .,;?!-':
             str_counts[char] += 1
         else:
             score -= 1
@@ -1123,8 +1293,7 @@ def scanKeys(msg, msg_format='ascii', case=True, space=True,  verbose=False):
     using a single-character XOR cipher. 
 
     Algorithm:
-        Given a string, scans through the characters with 
-        ascii values 32-127 inclusive. For each such 
+        Given a string, scans through all ascii characters. For each such 
         character, uses tools.repXOR to compute the XOR 
         of the input string with the key consisting of 
         the character times the length of the input string,
@@ -1162,7 +1331,7 @@ def scanKeys(msg, msg_format='ascii', case=True, space=True,  verbose=False):
         alphabetical order.)
     """
     key_data = { }
-    for key in range(32, 128):
+    for key in range(256):
         decrypt_bytes = repXOR(msg, chr(key), msg_format, key_format='ascii')
         decryption = encode(decrypt_bytes, 'ascii')
         key_data[key] = scoreText(decryption, case, space), decryption
@@ -1210,7 +1379,7 @@ def scanKeysFile(filename, file_format='ascii', verbose=False):
     with open(filename, 'r') as infile:
         for raw_line in infile:
             line = raw_line.rstrip('\n')
-            line_best_score, line_best_key = scanKeys(line, msg_format=file_format)[:2]
+            line_best_score, line_best_key = scanKeys(line, file_format)[:2]
 
             if line_best_score > best_score:
                 best_score = line_best_score
@@ -1366,7 +1535,7 @@ def guessRepXORKey(msg, key_size, msg_format='base64', case=True, space=True, ve
     key = ''.join(key_chars)
 
     if verbose:
-        print "The best key of length %d is: %s\n" % (key_size, key)
+        print "The best key of length %d is: %s\n" % (key_size, repr(key))
         print "The decryption of the message with this key is:\n"
         print repXOR(msg_bytes, key)
         
@@ -2355,3 +2524,58 @@ def decryptSeries(verbatim=False):
                 decrypts_strip.append(decrypt)
         series = '\n'.join(decrypts_strip)
     return series
+
+############### 6.iv. Attacks on RNGs #################
+
+# TODO: document
+# TODO: parallelize this someday
+def mtCrackSeed(val, start, end):
+    for sec in range(start, end):
+        twister = mt19937(sec)
+        if twister.next() == val:
+            return sec
+    print "No matching seed found"
+    return None
+
+# TODO: document
+def mtClone(twister):
+    state = [mtUntemper(twister.next()) for i in range(624)]
+    clone = mt19937(0)
+    clone.state = state 
+    return clone
+
+# TODO: is it appropriate to return None here? or better to throw an exception?
+# TODO: parallelize this someday
+def mtOracleFindSeed(oracle, user_input, verbose=False):
+    ctext = oracle(user_input)
+    known_len = len(user_input)
+    prefix_len = len(ctext) - known_len
+    known_ctext = ctext[prefix_len:]
+    keystream = [0] * known_len
+    for i in range(known_len):
+        ctext_byt = known_ctext[i]
+        known_byt = user_input[i]
+        keystream[i] = ord(str(XOR(ctext_byt, known_byt)))
+    
+    if verbose:
+        print "ciphertext returned by oracle: ", repr(ctext)
+        print "searching for seed..."
+    for test_seed in range(2**16):
+        twister = mt19937(test_seed)
+        for j in range(prefix_len):
+            twister.next()
+        for k in range(known_len):
+            test_byt = (twister.next() & 0xFF)
+            if test_byt != keystream[k]:
+                break
+            if k == known_len - 1:
+                return test_seed
+    return None
+
+# TODO: document. assume (??) that tokens are encryptions of prefixes + userid. (can this assumption be improved?). also assume seeds are 16-bit
+def isTimeSeededMT(oracle, userid):
+    if mtOracleFindSeed(oracle, userid):
+        return True
+    else:
+        return False
+    
