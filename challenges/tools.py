@@ -40,7 +40,7 @@ import random
 import time
 from Crypto.Cipher import AES
 from math import ceil
-from sys import stdout
+from sys import stdout, stderr
 
 ######### 0. Global variables and constants ##############
 
@@ -1276,7 +1276,9 @@ def verifyAsciiCBC(msg, key):
     ptext = AES_CBC_IVkey(msg, key, 'ascii', 'ascii', 'decrypt')
     for char in ptext:
         if (ord(char) > 126):
-            raise Unprintable(ptext)
+            with open('../data/error.log', 'w') as log:
+                stderr = log
+                raise Unprintable(ptext)
     return True
 
 ############# 6. Tools for breaking stuff ##################
