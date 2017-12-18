@@ -118,6 +118,11 @@ class InvalidAssumptions(Exception):
     def __init__(self):
         Exception.__init__(self, "The assumptions of this method are likely not valid.")
 
+# TODO: test and document
+class Unprintable(Exception):
+    def __init__(self, ptext):
+        Exception.__init__(self, "Unprintable characters in message:\n%s" % repr(ptext))
+
 ######### 2. Conversions between byte representations ########
 
 def decode(msg, msg_format='ascii'):
@@ -817,27 +822,28 @@ def AES_CBCFile(in_filename, key, iv, in_file_format='ascii', key_format='ascii'
     else:
         return out
 
-# TODO: clean up, document
-def AES_CTR(msg, key, nonce='0'*16, msg_format='ascii', key_format='ascii', nonce_format='hex'):    
-    msg_str = encode(decode(msg, msg_format), 'ascii')
-    num_full_blocks = len(msg_str) / 16
-    rem = len(msg_str) % 16
-    blocks = [msg_str[16*i: 16*(i + 1)] for i in range(num_full_blocks)]
-    if rem > 0:
-        blocks.append(msg_str[-rem:])
+# TODO: test and document
+def keyStreamBytesCTR(offset, length, key, nonce='0'*16, msg_format='ascii', key_format='ascii', nonce_format='hex'):
+    block_size = 16
+    start_block_num = offset / block_size
+    end_block_num = (offset + length) / block_size
+    start_block_offset = offset % block_size
+    keystream = ''
 
-    ctext = ''
-    ctr = 0
-    for block in blocks:
-        ctr_str = nonce + decToLitEndHex(ctr)
+    for block_num in range(start_block_num, end_block_num + 1):
+        ctr_str = nonce + decToLitEndHex(block_num)
         ctr_encr = AES_ECB(ctr_str, key, 'hex', key_format, 'encrypt', False)
-        if ctr < num_full_blocks:
-            ctext_block = XOR(ctr_encr, block, 'ascii', 'ascii')
-        else:
-            ctext_block = XOR(ctr_encr[0:rem], block, 'ascii', 'ascii')
-        ctext += ctext_block
-        ctr += 1
+        keystream += ctr_encr
 
+    keystream_bytes = keystream[start_block_offset:(start_block_offset + length)]
+    return keystream_bytes
+
+# TODO: clean up, document
+def AES_CTR(msg, key, nonce='0'*16, msg_format='ascii', key_format='ascii', nonce_format='hex'):
+    block_size = 16
+    msg_str = encode(decode(msg, msg_format), 'ascii')
+    keystream = keyStreamBytesCTR(0, len(msg_str), key, nonce, msg_format, key_format, nonce_format)
+    ctext = XOR(msg_str, keystream, 'ascii', 'ascii')
     return str(ctext)
 
 # TODO: clean up, document. note that this works for both encryption and decryption
@@ -1067,7 +1073,7 @@ def newEncrProfile(email_addr):
     profile = newProfile(email_addr)
     return AES_ECB(profile, rand_key)
 
-def validateProfile(ciphertext, verbose=False):
+def validateProfileECB(ciphertext, verbose=False):
     """ Given a string, attempts to decrypt the string 
     using AES-ECB and the key 'rand_key' and then to 
     parse the result as a profile of form
@@ -1092,7 +1098,7 @@ def validateProfile(ciphertext, verbose=False):
         print "You are logged in as %s with email address %s and UID %s" % (parsed_profile['role'], parsed_profile['email'], parsed_profile['uid'])
     return parsed_profile
 
-def newAuthString(msg, msg_format='ascii'):
+def newAuthStringCBC(msg, msg_format='ascii'):
     """ Given a string, concatenates it with the prefix 
     tools.auth_prefix and the postfix tools.auth_postfix
     and then encrypts the result with AES-CBC under the key
@@ -1124,7 +1130,40 @@ def newAuthString(msg, msg_format='ascii'):
     ciphertext = AES_CBC(affix, rand_key, iv)
     return ciphertext
 
-def validateAuthString(msg):
+def newAuthStringCTR(msg, msg_format='ascii'):
+    """ Given a string, concatenates it with the prefix 
+    tools.auth_prefix and the postfix tools.auth_postfix
+    and then encrypts the result with AES-CTR under the key
+    tools.rand_key and an all-0 nonce. 
+
+    Before encryption, the auth string is
+
+"comment1=cooking%20MCs;userdata=MSG;comment2=%20like%20a%20pound%20of%20bacon"
+    
+    where MSG is the (ascii encoding of) the user input.
+
+    Args: 
+        msg (string): the user input to the auth string.
+
+        msg_format (string): msg_format (string): the format
+        in which the bytes of 'msg' are encoded. Options are
+        'ascii' (default), 'hex', and 'base64'.
+
+    Returns:
+        string: the encrypted auth string.
+    """
+    if msg_format != 'ascii':
+        msg_str = encode(decode(msg, msg_format), 'ascii')
+    else:
+        msg_str = msg
+    msg_clean = quoteChars(msg_str, [';', '='])
+    affix = auth_prefix + msg_clean + auth_postfix
+    iv = '\x00' * 16
+    ciphertext = AES_CTR(affix, rand_key)
+    return ciphertext
+
+# TODO: should i generate a random nonce for each encryption?
+def validateAuthStringCBC(msg):
     """ Given a string, decrypt it with AES-CBC using the key
     tools.rand_key and attempt to parse the result as a token
     of the form produced by tools.newAuthString; validate
@@ -1140,6 +1179,31 @@ def validateAuthString(msg):
         False otherwise. 
     """
     plaintext = AES_CBC(msg, rand_key, fn='decrypt')
+    try:
+        tags = parseProfile(plaintext, ';')
+        if 'admin' in tags.keys():
+            return True
+        else:
+            return False
+    except IndexError:
+        return False
+
+def validateAuthStringCTR(msg):
+    """ Given a string, decrypt it with AES-CTR using the key
+    tools.rand_key and attempt to parse the result as a token
+    of the form produced by tools.newAuthStringCTR; validate
+    if the decryption parses to an admin token.
+
+    Args:
+        msg (string): a string to be validated/rejected as
+        an encrypted admin token.
+
+    Returns:
+        string: Returns True if parsing is successful and
+        'admin' appears in the resulting list of keys; returns
+        False otherwise. 
+    """
+    plaintext = AES_CTR(msg, rand_key)
     try:
         tags = parseProfile(plaintext, ';')
         if 'admin' in tags.keys():
@@ -1173,6 +1237,47 @@ def mtPasswordReset(userid):
     prefix = randBytes(prefix_length)
     ptext = prefix + userid
     return mt19937_CTR(ptext, seed, 'ascii')
+
+def readBytesCTR(ctext, offset, length, key, nonce='0'*16, ctext_format='ascii', key_format='ascii', nonce_format='hex'):
+    assert (offset >= 0), "Offset must be nonnegative"
+    assert (length > 0), "Length must be positive"
+    ctext_bytes = encode(decode(ctext, ctext_format), 'ascii')
+    assert (offset + length <= len(ctext_bytes)), "Request out of range"
+    keystream_bytes = keyStreamBytesCTR(offset, length, key, nonce, ctext_format, key_format, nonce_format)
+    decrypt = XOR(ctext[offset:(offset+length)], keystream_bytes, 'ascii', 'ascii')
+    return decrypt
+
+def editBytesCTR(ctext, offset, newtext, key, nonce='0'*16, ctext_format='ascii', newtext_format='ascii', key_format='ascii', nonce_format='ascii'):
+    assert (offset >= 0), "Offset must be nonnegative"
+    newtext_bytes = encode(decode(newtext, newtext_format), 'ascii')
+    length = len(newtext)
+    assert (length > 0), "Length must be positive"
+    ctext_bytes = encode(decode(ctext, ctext_format), 'ascii')
+    assert (offset + length <= len(ctext_bytes)), "Request out of range"
+    keystream_bytes = keyStreamBytesCTR(offset, length, key, nonce, ctext_format, key_format, nonce_format)
+    ctext_patch = XOR(newtext_bytes, keystream_bytes, 'ascii', 'ascii')
+    new_ctext = ctext[:offset] + ctext_patch + ctext[offset+length:]
+    return new_ctext
+
+# an API for users to request edited encryptions of a particular ciphertext
+def editAPI_CTR(ctext, offset, newtext, ctext_format='ascii', newtext_format='ascii'):
+    edit = editBytesCTR(ctext, offset, newtext, rand_key)
+    return edit
+
+# TODO: test and document
+def AES_CBC_IVkey(msg, key, msg_format='ascii', key_format='ascii', fn='encrypt'):
+    if fn == 'encrypt':
+        return AES_CBC(msg, key, key, msg_format, key_format, key_format, 'encrypt')[16:]
+    elif fn == 'decrypt':
+        return AES_CBC(msg, key, key, msg_format, key_format, key_format, 'decrypt')
+    
+# TODO: test and document
+def verifyAsciiCBC(msg, key):
+    ptext = AES_CBC_IVkey(msg, key, 'ascii', 'ascii', 'decrypt')
+    for char in ptext:
+        if (ord(char) > 126):
+            raise Unprintable(ptext)
+    return True
 
 ############# 6. Tools for breaking stuff ##################
 # i.   Frequency analysis tools                            #
@@ -2269,7 +2374,7 @@ def forgeAdminProfile():
 
 ############## 6.iii Attacks on AES-CBC ################
 
-def forgeAuthString(verbose=False):
+def forgeAuthStringCBC(verbose=False):
     """ Produce a string which is validated as an admin token
     by tools.validateAuthString, without knowledge of that
     function's decryption key.
@@ -2525,6 +2630,26 @@ def decryptSeries(verbatim=False):
         series = '\n'.join(decrypts_strip)
     return series
 
+# TODO: test and document
+def findAuthAffixLenCTR():
+    prefix_len, suffix_len = 0, 0
+    auth1 = newAuthStringCTR('\x00')
+    auth2 = newAuthStringCTR('\x01')
+    diff = encode(XOR(auth1, auth2), 'ascii')
+    for k in range(len(diff)):
+        if diff[k] != '\x00':
+            prefix_len = k
+    suffix_len = len(auth1) - 1 - prefix_len 
+    return (prefix_len, suffix_len)
+
+def forgeAuthStringCTR():
+    auth = newAuthStringCTR('\x00' * 18)
+    (prefix_len, suffix_len) = findAuthAffixLenCTR()
+    new_data = '\x00' * prefix_len + 'he;ll=o;admin=true' + '\x00' * suffix_len
+    new_auth = encode(XOR(new_data, auth), 'ascii')
+    return new_auth
+
+
 ############### 6.iv. Attacks on RNGs #################
 
 # TODO: document
@@ -2578,4 +2703,21 @@ def isTimeSeededMT(oracle, userid):
         return True
     else:
         return False
-    
+
+# TODO: test and document
+def findKeyStreamByteCTR(ctext, offset, ctext_format='ascii'):
+    for k in range(256):
+        edit = editAPI_CTR(ctext, offset, chr(k), ctext_format)
+        if edit[offset] == 0:
+            return chr(k)
+    return None
+
+# TODO: test and document
+def crackEditableCTR(ctext, ctext_format='ascii'):
+    ctext_bytes = encode(decode(ctext, ctext_format), 'ascii')
+    keystream = ''
+    for offset in range(len(ctext_bytes)):
+        keystream += findKeyStreamByteCTR(ctext, offset, ctext_format)
+    ptext = XOR(ctext, keystream, ctext_format, 'ascii')
+    return ptext
+
