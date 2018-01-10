@@ -102,7 +102,7 @@ def _encode(msg_bytes, out_format, end='big'):
     if out_format == 'bytes':
         return msg_bytes
     elif out_format == 'bin':
-        return ''.join(bin(ord(byt)).lstrip('0b').zfill(8) for byt in msg_bytes)
+        return ''.join(bin(byt).lstrip('0b').zfill(8) for byt in msg_bytes)
     elif out_format == 'ascii':
         msg = msg_bytes
     elif out_format == 'hex':
@@ -123,6 +123,9 @@ class Message():
     def __repr__(self):
         return "Message(%s)" % repr(self.bytes)
 
+    def __hash__(self):
+        return hash(self.bytes)
+
     def __len__(self):
         return len(self.bytes)
 
@@ -134,11 +137,35 @@ class Message():
         else:
             raise Exception
 
+    def __lt__(self, other):
+        return (self.bytes < other.bytes)
+
+    def __le__(self, other):
+        return (self.bytes <= other.bytes)
+
+    def __eq__(self, other):
+        return (self.bytes == other.bytes)
+
+    def __ne__(self, other):
+        return (self.bytes != other.bytes)
+
+    def __gt__(self, other):
+        return (self.bytes > other.bytes)
+    
+    def __ge__(self, other):
+        return (self.bytes >= other.bytes)
+
     def __add__(self, other):
         return Message(self.bytes + other.bytes)
     
     def __mul__(self, rep):
         return Message(self.bytes * rep)
+
+    def join(self, msg_list):
+        return Message(self.bytes.join(msg.bytes for msg in msg_list))
+
+    def split(self, msg_byt):
+        return [Message(sub) for sub in (self.bytes).split(msg_byt.bytes)]
 
     def ascii(self):
         return _encode(self.bytes, 'ascii')
@@ -190,8 +217,26 @@ class Message():
             return True
         except BadPad:
             return False        
+        
+    def eatChars(self, char_list):
+        """ Given a message and a list of characters, adds quotes
+        around all occurances of those characters in the message.
 
-def blocks(msg, block_size=16):
+        Args: 
+        msg (string): the message to be modified.
+
+        char_list (list of chars): a list of all characters
+        to be quoted out in 'msg'.
+
+        Returns:
+        string: the modification of 'msg' which has quotes
+        around every character in 'char_list'.
+        """
+        for msg_byt in char_list:
+            self.bytes = self.bytes.replace(msg_byt.bytes, b'')
+        return self
+    
+def listBlocks(msg, block_size=16):
     assert (1 <= block_size and block_size < 256), "Block size must be an integer in range(1, 256)"
     num_blocks = int(len(msg)/block_size)
     blocks = [Message(msg.bytes[block_size * i: block_size * (i+1)]) for i in range(num_blocks)]
