@@ -1,3 +1,6 @@
+from tools.bitops import XOR
+from tools.message import Message
+
 def mtNextWord(word, i):
     word_len = 32
     f = 1812433253
@@ -32,20 +35,6 @@ def mtTemper(word):
     tempered = z ^ (z >> L)
     return tempered
 
-def mtUntemper(tempered):
-    U = 11
-    S = 7
-    T = 15
-    L = 18
-    B = int('9D2C5680', 16)
-    C = int('EFC60000', 16)
-
-    z = tempered ^ (tempered >> L)
-    y = z ^ ((z << T) & C) ^ ((z << 2*T) & (C << T) & C)
-    x = y ^ ((y << S) & B) ^ ((y << 2*S) & (B << S) & B) ^ ((y << 3*S) & (B << 2*S) & (B << S) & B) ^ ((y << 4*S) & (B << 3*S) & (B << 2*S) & (B << S) & B)
-    word = x ^ (x >> U) ^ (x >> 2*U)
-    return word
-
 class mt19937_32():  
     def __init__(self, seed):
         self.state = mtInitialize(seed)
@@ -58,3 +47,12 @@ class mt19937_32():
         self.state[index] = new
         self.index = (index + 1) % 624
         return mtTemper(new)
+
+def mt19937_32_CTR(msg, seed):
+    twister = mt19937_32(seed)
+    # next key byte is the least significant byte of the next output of twister
+    key = Message(b'').join(Message(bytes([twister.next() & 0xFF])) for byt in msg)
+    return XOR(key, msg)
+    
+        
+        

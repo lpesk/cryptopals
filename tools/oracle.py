@@ -1,6 +1,7 @@
 from tools.message import Message
 from tools.aes import AES_ECB, AES_CBC
 from tools.randomdata import randMsg
+from tools.mt19937 import mt19937_32_CTR
 from random import randint
 
 rand_prefix = randMsg(0, 20)
@@ -42,6 +43,13 @@ class Oracle():
     
     def decryptCTR(self, msg):
         return AES_CTR(plaintext, self.key)
+
+    def encryptMT19937_32_CTR(self, msg):
+        plaintext = self.prefix + msg + self.postfix
+        return mt19937_32_CTR(plaintext, self.key)
+
+    def decryptMT19937_32_CTR(self, msg):
+        return mt19937_32_CTR(msg, self.key)
 
 def ECBOracle(msg):
     """ Appends the string tools.postfix to a message, 
