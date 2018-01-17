@@ -85,8 +85,15 @@ def AES_CBC(msg, key, iv='', fn='encrypt'):
             out_blocks.append(new_block)
     return joinBlocks(out_blocks)
 
+def AES_CBC_IVKey(msg, key, fn='encrypt'):
+    block_size = 16
+    if fn is 'encrypt':
+        return AES_CBC(msg, key, key, 'encrypt')[block_size:]
+    else:
+        return AES_CBC(msg, key, key, 'decrypt')
 
 def keystreamCTR(key, length, offset=0, nonce=None, block_size=16):
+    assert(0 <= offset)
     if nonce is None:
         nonce = Message(b'\x00' * int(block_size / 2))
     start_block = int(offset / block_size)
@@ -104,4 +111,3 @@ def keystreamCTR(key, length, offset=0, nonce=None, block_size=16):
 def AES_CTR(msg, key, nonce=None, block_size=16):
     keystream = keystreamCTR(key, len(msg), 0, nonce, block_size)
     return XOR(msg, keystream)
-    

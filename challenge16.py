@@ -7,7 +7,7 @@ from collections import OrderedDict
 prefix = Message(b'comment1=cooking%20MCs;userdata=')
 postfix = Message(b';comment2=%20like%20a%20pound%20of%20bacon')
 
-class CookieFactory():
+class CookieFactoryCBC():
     def __init__(self):
         self.oracle = Oracle(None, prefix, postfix)
         self.sep_field = Message(b';')
@@ -22,6 +22,7 @@ class CookieFactory():
         decr_msg = self.oracle.decryptCBC(msg)
         try:
             token = Token.fromMsg(decr_msg, Message(b';'), Message(b'='))
+            print(token.data)
         except IndexError:
             raise InvalidToken
         try:
@@ -29,7 +30,7 @@ class CookieFactory():
         except KeyError:
             return False
 
-def forgeAdminCookie(factory, try_byte):
+def forgeAdminCookieCBC(factory, try_byte):
     """ Produce a string which is validated as an admin token
     by tools.validateAuthString, without knowledge of that
     function's decryption key.
@@ -87,11 +88,11 @@ def forgeAdminCookie(factory, try_byte):
     return forged
 
 if __name__ == '__main__':
-    factory = CookieFactory()
+    factory = CookieFactoryCBC()
     try_byte = 65
     is_admin = False
     while try_byte < 127 and not is_admin:
-        forged = forgeAdminCookie(factory, try_byte)
+        forged = forgeAdminCookieCBC(factory, try_byte)
         try:
             is_admin = factory.isAdminCookie(forged)
         except InvalidToken:

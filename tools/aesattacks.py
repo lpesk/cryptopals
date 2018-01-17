@@ -1,9 +1,9 @@
 from tools.message import Message, listBlocks, joinBlocks
 from tools.bitops import XOR
-from tools.aes import AES_ECB, AES_CBC, AES_CTR
+from tools.aes import AES_ECB, AES_CBC, AES_CTR, keystreamCTR
 from tools.freqanalysis import guessRepXORKey
 from math import ceil
-from sys import stdout
+from sys import stderr
 
 class InvalidAssumptions(Exception):
     """ Exception raised when some assumptions required by
@@ -655,3 +655,28 @@ def breakRepNonceCTR(ciphertext_list):
     guess_key = guessRepXORKey(ciphertext, key_size=min_len)
     return guess_key
 
+def crackEditableCTR(ciphertext, edit_fn):
+    keystream = Message(b'')
+    for offset in range(len(ciphertext)):
+        for msg_byte in [Message(bytes([val])) for val in range(256)]:
+            found_byte = False
+            edit = edit_fn(ciphertext, offset, msg_byte)
+            if edit[offset] == Message(b'\x00'):
+                found_byte = True
+                keystream += msg_byte
+                break
+        if msg_byte is Message(b'\xff') and not found_byte:
+            raise Exception('Keystream byte not found')
+    plaintext = XOR(keystream, ciphertext)
+    return plaintext
+
+def findAffixLengthCTR(oracle):
+    prefix_len, suffix_len = 0, 0
+    ciphertext_1 = oracle.encryptCTR(Message(b'\x00'))
+    ciphertext_2 = oracle.encryptCTR(Message(b'\x01'))
+    diff = XOR(ciphertext_1, ciphertext_2)
+    for offset in range(len(diff)):
+        if diff[offset] != Message(b'\x00'):
+            prefix_len = offset
+    suffix_len = len(ciphertext_1) - 1 - prefix_len
+    return (prefix_len, suffix_len)    

@@ -1,5 +1,6 @@
 from tools.message import Message
-from tools.aes import AES_ECB, AES_CBC
+from tools.bitops import XOR
+from tools.aes import AES_ECB, AES_CBC, AES_CBC_IVKey, AES_CTR, keystreamCTR
 from tools.randomdata import randMsg
 from tools.mt19937 import mt19937_32_CTR
 from random import randint
@@ -17,32 +18,43 @@ class Oracle():
         self.key = key
         self.prefix = prefix
         self.postfix = postfix
+
+    def formMsg(self, msg):
+        return self.prefix + msg + self.postfix
     
     def encryptECB(self, msg):
-        plaintext = self.prefix + msg + self.postfix
-        return AES_ECB(plaintext, self.key)
+        return AES_ECB(self.formMsg(msg), self.key)
 
     def decryptECB(self, msg):
         return AES_ECB(msg, self.key, fn='decrypt')
 
     def encryptCBC(self, msg):
-        plaintext = self.prefix + msg + self.postfix
-        iv = randMsg(16)
-        return AES_CBC(plaintext, self.key, iv)
+        return AES_CBC(self.formMsg(msg), self.key, iv=randMsg(16))
 
     def decryptCBC(self, msg, check_pad=False):
         return AES_CBC(msg, self.key, fn='decrypt')
 
-    def decryptAndCheckPadCBC(self, msg):
-        plaintext = AES_CBC(msg, self.key, fn='decrypt')
-        return plaintext.validatePad()
+    def encryptIVKeyCBC(self, msg):
+        return AES_CBC_IVKey(self.formMsg(msg), self.key)
+
+    def decryptIVKeyCBC(self, msg):
+        return AES_CBC_IVKey(msg, self.key, fn='decrypt')
 
     def encryptCTR(self, msg):
         plaintext = self.prefix + msg + self.postfix
         return AES_CTR(plaintext, self.key)
     
     def decryptCTR(self, msg):
-        return AES_CTR(plaintext, self.key)
+        return AES_CTR(msg, self.key)
+
+    def editCTR(self, msg, offset, new):
+        # note that offset is asserted to be nonnegative in aes.keystreamCTR
+        assert(len(new) <= len(msg) - offset)
+        key_bytes = keystreamCTR(self.key, len(new), offset)
+        prev = msg[:offset]
+        post = msg[offset + len(new):]
+        insert = XOR(new, key_bytes)
+        return prev + insert + post
 
     def encryptMT19937_32_CTR(self, msg):
         plaintext = self.prefix + msg + self.postfix
