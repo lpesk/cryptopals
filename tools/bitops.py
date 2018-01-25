@@ -29,6 +29,19 @@ def repXOR(msg, key):
     key_rep = key * int(len(msg)/len(key)) + key_rem
     return XOR(msg, key_rep)
 
+def rotate(integer, tot_bits, rot_bits):
+    # if rot_bits is positive, rotate left; if negative, rotate right
+    if rot_bits == 0:
+        return integer
+    mask = (2 ** tot_bits - 1)
+    assert (integer <= mask)
+    if rot_bits > 0:
+        rotated = ((integer << rot_bits) | (integer >> (tot_bits - rot_bits))) & mask
+    else:
+        rot_bits = abs(rot_bits)
+        rotated = ((integer >> rot_bits) | (integer << (tot_bits - rot_bits))) & mask
+    return rotated
+
 def hamDist(msg1, msg2):
     """ Compute the Hamming distance between the byte arrays 
     represented by two Message instances.

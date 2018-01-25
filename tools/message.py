@@ -3,7 +3,7 @@ import base64
 """ valid_formats: list of valid format options for all 
 functions operating on strings.
 """
-valid_formats = ['bytes', 'ascii', 'bin', 'hex', 'base64']
+valid_formats = ['bytes', 'ascii', 'bin', 'hex', 'int', 'base64']
 
 valid_ends = ['big', 'little']
 
@@ -66,6 +66,10 @@ def _decode(msg, msg_format, end='big'):
         msg_bytes = b''.join(bytes([int(msg[k*8:(k+1)*8], 2)]) for k in range(byt_len))
     elif msg_format == 'hex':
         msg_bytes = base64.b16decode(bytes(msg, encoding='utf-8'), True)
+    elif msg_format == 'int':
+        msg_hex = hex(msg).lstrip('0x')
+        pad = '0' if len(msg_hex) % 2 else ''
+        msg_bytes = _decode(pad + msg_hex, 'hex', end)
     else:
         msg_bytes = base64.b64decode(bytes(msg, encoding='utf-8'))
     if end == 'little':
@@ -103,6 +107,8 @@ def _encode(msg_bytes, out_format, end='big'):
         return msg_bytes
     elif out_format == 'bin':
         return ''.join(bin(byt).lstrip('0b').zfill(8) for byt in msg_bytes)
+    elif out_format == 'int':
+        return int(_encode(msg_bytes, 'hex'), 16)
     elif out_format == 'ascii':
         msg = msg_bytes
     elif out_format == 'hex':
@@ -110,6 +116,7 @@ def _encode(msg_bytes, out_format, end='big'):
     else:
         msg = base64.b64encode(msg_bytes)
     return msg.decode('utf-8')
+
         
 class Message():
     def __init__(self, msg, msg_format='bytes', end='big'):
@@ -176,6 +183,9 @@ class Message():
     def hex(self, end='big'):
         return _encode(self.bytes, 'hex', end)
 
+    def int(self, end='big'):
+        return _encode(self.bytes, 'int', end)
+
     def base64(self, end='big'):
         return _encode(self.bytes, 'base64', end)
         
@@ -217,6 +227,12 @@ class Message():
             return True
         except BadPad:
             return False        
+
+    def validateAscii(self):
+        for byt in self.bytes:
+            if byt >= 127:
+                return False
+        return True
         
     def eatChars(self, char_list):
         """ Given a message and a list of characters, adds quotes
