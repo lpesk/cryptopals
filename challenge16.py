@@ -22,7 +22,6 @@ class CookieFactoryCBC():
         decr_msg = self.oracle.decryptCBC(msg)
         try:
             token = Token.fromMsg(decr_msg, Message(b';'), Message(b'='))
-            print(token.data)
         except IndexError:
             raise InvalidToken
         try:

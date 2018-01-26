@@ -5,29 +5,29 @@ class SHA1():
     def __init__(self):
         self.state = None
 
-    def __preProcess(self, msg):
+    def formPad(self, msg_len):
         # encode the bit length of msg as a big-endian 8-byte word
-        orig_bit_len = len(msg.bin())
+        orig_bit_len = msg_len * 8
         orig_len_msg = Message(orig_bit_len, 'int')
         orig_len_msg_padded = Message(b'\x00' * (8 - len(orig_len_msg))) + orig_len_msg
 
         # add a '1' bit to msg on the less-significant end and fill it out to a byte with 0s
-        padded_msg = msg + Message(b'\x80')
-        padded_msg_len = len(padded_msg)
+        pad = Message(b'\x80')
+        padded_msg_len = msg_len + len(pad)
 
         # pad with 0 bytes until padded message length is 8 bytes short of a multiple of 64 bytes
         if (padded_msg_len % 64 <= 56):
-            padded_msg += Message(b'\x00' * (56 - (padded_msg_len % 64)))
+            pad += Message(b'\x00' * (56 - (padded_msg_len % 64)))
         else:
-            padded_msg += Message(b'\x00' * (56 + 64 - (padded_msg_len % 64)))
+            pad += Message(b'\x00' * (56 + 64 - (padded_msg_len % 64)))
         
         # add encoding of bit length of the original msg
         # length of padded msg should now be a multiple of 64 bytes
-        padded_msg += orig_len_msg_padded
-        assert (len(padded_msg) % 64 == 0)
-        return padded_msg
+        pad += orig_len_msg_padded
+        assert ((msg_len + len(pad)) % 64 == 0)
+        return pad
            
-    def __processChunk(self, chunk):
+    def processChunk(self, chunk):
         # lazy little function to add lists of equal length entrywise (mod 2 ** 32)
         add_lists = lambda x, y: [(x[i] + y[i]) % (2 ** 32) for i in range(len(x))]
 
@@ -68,7 +68,7 @@ class SHA1():
         # update state
         self.state = add_lists(self.state, [a, b, c, d, e])
 
-    def __formDigest(self):
+    def formDigest(self):
         # concatenate the 5 4-byte state words to form a 20-byte digest
         [a, b, c, d, e] = self.state
         output = (a << 128) | (b << 96) | (c << 64) | (d << 32) | e
@@ -78,19 +78,20 @@ class SHA1():
         else:
             return raw_hex
             
-    def hash(self, msg, state=None):
+    def hash(self, msg, state=None, pad=True):
         if state is None:
-            state = [0x67452301,
-                     0xEFCDAB89,
-                     0x98BADCFE,
-                     0x10325476,
-                     0xC3D2E1F0]
-        self.state = state
-        padded_msg = self.__preProcess(msg)
+            self.reset()
+        else:
+            self.state = state
+        if pad:
+            padded_msg = msg + self.formPad(len(msg))
+        else:
+            padded_msg = msg
+        assert (len(padded_msg) % 64 == 0)
         chunks = listBlocks(padded_msg, block_size=64)
         for chunk in chunks:
-            self.__processChunk(chunk)
-        return self.__formDigest()
+            self.processChunk(chunk)
+        return self.formDigest()
  
     def reset(self):
         self.state = [0x67452301,
