@@ -1,6 +1,6 @@
 from tools.message import Message
 from tools.sha1 import SHA1
-from tools.authentication import macSHA1
+from tools.authentication import macSHA1, BadMAC
 from tools.authattacks import extendMACSHA1
 from tools.oracle import Oracle
 from tools.token import Token, InvalidToken
@@ -22,7 +22,7 @@ class CookieFactoryMACSHA1():
     def isAdminAuthCookie(self, mac_pair):
         (cookie, mac) = mac_pair
         if not self.oracle.checkMACSHA1(cookie, mac):
-            raise Exception("Failed to authenticate cookie")
+            raise BadMAC
         try:
             token = Token.fromMsg(cookie, Message(b';'), Message(b'='))
         except IndexError:
@@ -33,6 +33,9 @@ class CookieFactoryMACSHA1():
             return False
 
 if __name__ == '__main__':
+    min_key_len = 0
+    max_key_len = 32
+
     factory = CookieFactoryMACSHA1()
     username = 'notatallsneaky'
     (cookie, mac) = factory.newAuthCookie(username)
@@ -41,8 +44,22 @@ if __name__ == '__main__':
     print("...are we admin?\n\t", factory.isAdminAuthCookie((cookie, mac)))
     
     add_text = Message(b';admin=true')
-    (new_cookie, new_mac) = extendMACSHA1(cookie, mac, add_text, 16)
     print("\nExtending the MAC with:\n\t",add_text)
+
+    is_admin = False
+    key_len = min_key_len
+    while not is_admin:
+        if key_len > max_key_len:
+            raise Exception("Key length not found in range [%d, %d]" % (min_key_len, max_key_len))
+        try:
+            test_pair = extendMACSHA1(cookie, mac, add_text, key_len)
+            is_admin = factory.isAdminAuthCookie(test_pair)
+        except BadMAC:
+            pass
+        key_len += 1
+    
+    (new_cookie, new_mac) = test_pair
+    print("Key length is", key_len - 1)
     print("New cookie plaintext is:\n\t",new_cookie)
     print("...its keyed MAC is:\n\t", new_mac)
     print("...are we admin?\n\t", factory.isAdminAuthCookie((new_cookie, new_mac)))

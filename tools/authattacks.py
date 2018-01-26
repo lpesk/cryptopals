@@ -15,4 +15,3 @@ def extendMACSHA1(msg, mac, add_msg, key_len):
     
     extended_mac = s.hash(add_msg + new_msg_pad, state, pad=False)
     return (new_msg, extended_mac)
-    
