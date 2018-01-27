@@ -27,7 +27,7 @@ for trial in range(trials):
 key = randMsg(16)
 msg = randMsg(20)
 mac = macSHA1(key, msg)
-print("Here's a sample use of a SHA1 keyed MAC")
+print("\nA sample use of a SHA1 keyed MAC:")
 print("Key:", key)
 print("Msg:", msg)
 print("MAC:", mac)

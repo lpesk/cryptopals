@@ -29,6 +29,7 @@ def repXOR(msg, key):
     key_rep = key * int(len(msg)/len(key)) + key_rem
     return XOR(msg, key_rep)
 
+# TODO: switch tot_bits and rot_bits and give tot_bits a default arg of 32
 def rotate(integer, tot_bits, rot_bits):
     # if rot_bits is positive, rotate left; if negative, rotate right
     if rot_bits == 0:

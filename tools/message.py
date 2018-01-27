@@ -69,7 +69,7 @@ def _decode(msg, msg_format, end='big'):
     elif msg_format == 'int':
         msg_hex = hex(msg).lstrip('0x')
         pad = '0' if len(msg_hex) % 2 else ''
-        msg_bytes = _decode(pad + msg_hex, 'hex', end)
+        msg_bytes = _decode(pad + msg_hex, 'hex')
     else:
         msg_bytes = base64.b64decode(bytes(msg, encoding='utf-8'))
     if end == 'little':
