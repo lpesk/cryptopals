@@ -3,7 +3,7 @@ from tools.bitops import XOR
 from tools.aes import AES_ECB, AES_CBC, AES_CBC_IVKey, AES_CTR, keystreamCTR
 from tools.randomdata import randMsg
 from tools.mt19937 import mt19937_32_CTR
-from tools.authentication import macSHA1, macMD4
+from tools.authentication import macSHA1, macMD4, hmacSHA1
 from random import randint
 
 rand_prefix = randMsg(0, 20)
@@ -77,6 +77,13 @@ class Oracle():
 
     def checkMACMD4(self, msg, mac):
         return (macMD4(self.key, msg) == mac)
+
+    def authHMACSHA1(self, msg):
+        plaintext = self.formMsg(msg)
+        return (plaintext, hmacSHA1(self.key, plaintext))
+
+    def checkHMACSHA1(self, msg, mac):
+        return (hmacSHA1(self.key, msg) == mac)
 
 def ECBOracle(msg):
     """ Appends the string tools.postfix to a message, 

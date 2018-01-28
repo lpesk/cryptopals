@@ -8,16 +8,16 @@ from Crypto.Hash.SHA import SHA1Hash as true_SHA1
 trials = 10
 
 for trial in range(trials):
-    m = randMsg(0, 1000)
+    msg = randMsg(0, 1000)
 
     print("\nTrial %d of %d:" % (trial + 1, trials))
-    print("\nTesting sha1 hash of ", m)
+    print("\nTesting sha1 hash of", msg)
 
-    test_digest = SHA1().hash(m)
+    test_digest = SHA1().hash(msg)
     print("Test digest:", test_digest)
 
     s = true_SHA1()
-    s.update(m.bytes)
+    s.update(msg.bytes)
     true_digest = s.hexdigest()
     print("True digest:", true_digest)
 
