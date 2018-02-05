@@ -1,9 +1,20 @@
 from tools.message import Message
-from random import randint
+from random import randint, choice
+from string import printable
 
-def randMsg(int1, int2=None):
-    if int2 is None:
-        length = int1
+def randBytes(min_len, max_len=None):
+    if max_len is None:
+        length = min_len
     else:
-        length = randint(int1, int2)
-    return Message(b''.join(bytes([randint(0, 255)]) for k in range(length)))
+        length = randint(min_len, max_len)
+    return b''.join(bytes([randint(0, 255)]) for _ in range(length))
+
+def randPrintableAscii(min_len, max_len=None):
+    if max_len is None:
+        length = min_len
+    else:
+        length = randint(min_len, max_len)
+    return ''.join(choice(printable) for _ in range(length))
+
+def randMsg(min_len, max_len=None):
+    return Message(randBytes(min_len, max_len))

@@ -5,6 +5,7 @@ from tools.randomdata import randMsg
 from tools.mt19937 import mt19937_32_CTR
 from tools.authentication import macSHA1, macMD4, hmacSHA1
 from random import randint
+from time import sleep
 
 rand_prefix = randMsg(0, 20)
 
@@ -84,6 +85,19 @@ class Oracle():
 
     def checkHMACSHA1(self, msg, mac):
         return (hmacSHA1(self.key, msg) == mac)
+    
+    def checkHMACSHA1_insecure(self, msg, hmac):
+        true_hmac_bytes = Message(hmacSHA1(self.key, msg), 'hex').bytes
+        test_hmac_bytes = Message(hmac, 'hex').bytes
+        for (byte1, byte2) in zip(true_hmac_bytes, test_hmac_bytes):
+            if byte1 != byte2:
+                return False
+            sleep(.05)
+        if len(true_hmac_bytes) != len(test_hmac_bytes):
+            return False
+        else:
+            return True
+
 
 def ECBOracle(msg):
     """ Appends the string tools.postfix to a message, 
