@@ -1,4 +1,4 @@
-import base64
+from base64 import b16decode, b16encode, b64decode, b64encode
 
 """ valid_formats: list of valid format options for all 
 functions operating on strings.
@@ -69,7 +69,7 @@ def _decode(msg, msg_format, end='big'):
         msg_bytes = b''.join(bytes([int(msg[k*8:(k+1)*8], 2)]) for k in range(byt_len))
 
     elif msg_format == 'hex':
-        msg_bytes = base64.b16decode(bytes(msg, encoding='utf-8'), True)
+        msg_bytes = b16decode(bytes(msg, encoding='utf-8'), True)
 
     elif msg_format == 'int':
         if not isinstance(msg, int):
@@ -84,7 +84,7 @@ def _decode(msg, msg_format, end='big'):
             msg_bytes = _decode(pad + msg_hex, 'hex')
 
     else:
-        msg_bytes = base64.b64decode(bytes(msg, encoding='utf-8'))
+        msg_bytes = b64decode(bytes(msg, encoding='utf-8'))
 
     if end == 'little':
         msg_bytes = msg_bytes[::-1]
@@ -136,10 +136,10 @@ def _encode(msg_bytes, out_format, end='big'):
         msg = msg_bytes
 
     elif out_format == 'hex':
-        msg = base64.b16encode(msg_bytes).lower()
+        msg = b16encode(msg_bytes).lower()
 
     else:
-        msg = base64.b64encode(msg_bytes)
+        msg = b64encode(msg_bytes)
     return msg.decode('utf-8')
 
         
@@ -216,10 +216,10 @@ class Message():
     def base64(self, end='big'):
         return _encode(self.bytes, 'base64', end)
         
-    def pad(self, block_size=16, extra=True):
-        assert (1 <= block_size and block_size <= 256), "Block size must be an integer in [1, 256] inclusive"
+    def pad(self, block_size=16, strict=True):
+        assert (0 < block_size and block_size < 256), "Block size must be an integer in [1, 255] inclusive"
         if len(self) % block_size == 0:
-            if extra:
+            if strict:
                 pad_size = block_size
             else:
                 return self
@@ -231,6 +231,8 @@ class Message():
         return self
 
     def stripPad(self, block_size=16, strict=True):
+        assert (self != Message(b'')), "Message must be nonempty"
+        assert (0 < block_size and block_size < 256), "Block size must be an integer in [1, 255] inclusive"
         poss_pad_size = int(self.bytes[-1])
         in_bounds = (poss_pad_size >= 1 and poss_pad_size <= block_size)
         if in_bounds:
@@ -280,7 +282,7 @@ class Message():
         return self
     
 def listBlocks(msg, block_size=16):
-    assert (1 <= block_size and block_size < 256), "Block size must be an integer in range(1, 256)"
+    assert (0 < block_size and block_size < 256), "Block size must be an integer in range [1, 255] inclusive"
     num_blocks = int(len(msg)/block_size)
     blocks = [Message(msg.bytes[block_size * i: block_size * (i+1)]) for i in range(num_blocks)]
     if len(msg) % block_size != 0:
