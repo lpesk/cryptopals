@@ -145,12 +145,14 @@ def _encode(msg_bytes, out_format, end='big'):
         
 class Message():
     def __init__(self, msg, msg_format='bytes', end='big'):
-        if msg_format == 'bytes':
-            self.bytes = msg
-        elif msg_format in valid_formats and end in valid_ends:
-            self.bytes = _decode(msg, msg_format, end)
-        else:
+        if msg_format not in valid_formats:
             raise InvalidFormat
+        elif end not in valid_ends:
+            raise InvalidEndian
+        elif msg_format == 'bytes':
+            self.bytes = msg
+        else:
+            self.bytes = _decode(msg, msg_format, end)
 
     def __repr__(self):
         return "Message(%s)" % repr(self.bytes)
