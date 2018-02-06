@@ -3,7 +3,7 @@ import base64
 """ valid_formats: list of valid format options for all 
 functions operating on strings.
 """
-valid_formats = ['bytes', 'ascii', 'bin', 'hex', 'int', 'base64']
+valid_formats = ['ascii', 'base64', 'bin', 'bytes', 'hex', 'int']
 
 valid_ends = ['big', 'little']
 
@@ -55,25 +55,40 @@ def _decode(msg, msg_format, end='big'):
         raise InvalidFormat
     if end not in valid_ends:
         raise InvalidEndian
+
     if msg_format == 'bytes':
         msg_bytes = msg
+
     elif msg_format == 'ascii':
         msg_bytes = bytes(msg, 'utf-8')
+
     elif msg_format == 'bin':
         if len(msg) % 8 != 0:
             raise Exception("Length of binary string must be a multiple of 8")
         byt_len = int(len(msg)/8)
         msg_bytes = b''.join(bytes([int(msg[k*8:(k+1)*8], 2)]) for k in range(byt_len))
+
     elif msg_format == 'hex':
         msg_bytes = base64.b16decode(bytes(msg, encoding='utf-8'), True)
+
     elif msg_format == 'int':
-        msg_hex = hex(msg).lstrip('0x')
-        pad = '0' if len(msg_hex) % 2 else ''
-        msg_bytes = _decode(pad + msg_hex, 'hex')
+        if not isinstance(msg, int):
+            raise Exception("Argument 'msg' cannot be interpreted as an integer")
+        elif msg < 0:
+            raise Exception("Argument 'msg' must be a nonnegative integer")
+        elif msg == 0:
+            msg_bytes = b''
+        else:
+            msg_hex = hex(msg).lstrip('0x')
+            pad = '0' if len(msg_hex) % 2 else ''
+            msg_bytes = _decode(pad + msg_hex, 'hex')
+
     else:
         msg_bytes = base64.b64decode(bytes(msg, encoding='utf-8'))
+
     if end == 'little':
         msg_bytes = msg_bytes[::-1]
+
     return msg_bytes
 
 def _encode(msg_bytes, out_format, end='big'):
@@ -101,18 +116,28 @@ def _encode(msg_bytes, out_format, end='big'):
         raise InvalidFormat
     if end not in valid_ends:
         raise InvalidEndian
+
     if end == 'little':
         msg_bytes = msg_bytes[::-1]
+
     if out_format == 'bytes':
         return msg_bytes
+
     elif out_format == 'bin':
         return ''.join(bin(byt).lstrip('0b').zfill(8) for byt in msg_bytes)
+
     elif out_format == 'int':
-        return int(_encode(msg_bytes, 'hex'), 16)
+        if msg_bytes == b'':
+            return 0
+        else:
+            return int(_encode(msg_bytes, 'hex'), 16)
+
     elif out_format == 'ascii':
         msg = msg_bytes
+
     elif out_format == 'hex':
         msg = base64.b16encode(msg_bytes).lower()
+
     else:
         msg = base64.b64encode(msg_bytes)
     return msg.decode('utf-8')
