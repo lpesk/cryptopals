@@ -35,8 +35,10 @@ def XOR(msg1, msg2):
         length.
     """
     assert (len(msg1) == len(msg2)), "Messages must be of equal length"
-    xor = Message(b''.join(bytes([a ^ b]) for (a, b) in zip(msg1.bytes, msg2.bytes)))
-    return xor
+    bytes_1 = msg1.bytes
+    bytes_2 = msg2.bytes
+    xor_bytes = b''.join(bytes([a ^ b]) for (a, b) in zip(bytes_1, bytes_2))
+    return Message(xor_bytes)
     
 def repeatXOR(msg, key):
     """ Compute the XOR of a message with a repeating key. That is, repeat the key until it reaches the length of the message (if the key is shorter than the message), or truncate the key to the length of the message (if the key is longer than the message), and XOR the result with the message.
