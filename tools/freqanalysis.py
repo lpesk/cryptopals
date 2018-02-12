@@ -1,89 +1,49 @@
-from tools.bitops import XOR, hamDist
+from tools.bitops import XOR, hammingDistance
 from tools.message import Message
-from tools.bitops import repXOR
+from tools.bitops import repeatXOR
 from string import ascii_letters
 
 
 def scoreText(msg, case=False, space=True):
-    """ Given a string, compute a score representing the
-    likelihood that the string is English text. Scores are
-    floats in range [-1, 1]. A higher score indicates a
-    a higher likelihood that input string was English text.
-    By default, the function gives higher scores to strings
-    with English-like frequency of spaces, and is not case
-    sensitive. Both of these defaults can be changed with
-    keyword arguments.
+    """ Given an instance of the Message class, compute a score measuring the likelihood that it represents English text. Scores are floats in range [-1, 1]. A higher score indicates a higher likelihood that input message was English text. By default, the function gives higher scores to strings with English-like frequency of spaces, and is not case sensitive. Both of these defaults can be changed with keyword arguments.
 
     Algorithm: 
-        One point is deducted for each character in the 
-        string which is not alphabetic or a space. Points
-        are awarded for each character which appears both
-        among the 6 most frequent characters in the input
-        string and also among the 6 most frequent characters
-        in typical English, and likewise for the 6 least 
-        frequent characters. The number of points awarded 
-        for each such character is equal to the length of 
-        the string divided by 12 (as a float). Finally, 
-        scores are normalized by the length of the string,
-        so scores lie in the range [-1, 1]. 
+        One point is deducted for each character in the string which is not alphabetic, a space, or one of following punctuation characters: '.,;?!-'. Points are awarded for each character which appears both among the 6 most frequent characters in the input string and also among the 6 most frequent characters in typical English, and likewise for the 6 least frequent characters. The number of points awarded for each such character is equal to the length of the string divided by 12 (as a float). Finally, scores are normalized by the length of the string, so scores lie in the range [-1, 1]. 
     
     Heuristics:
-        Short texts which are not even close to English 
-        (e.g., repeating XOR of an English sentence with a
-        random key) generally to have negative scores,
-        while the positive range seems to disambiguate well
-        between short texts which are "almost English" (e.g.,
-        the decryption of repeating-key XOR encryptions with 
-        a key which differs in a few characters from the true
-        key) and perfect English. The optional keyword
-        arguments don't seem to make a big difference in
-        outcomes, but are occasionally useful for fine-tuning
-        once it's clear what kind of text (spaced,
-        case-differentiated, etc) we're looking for. 
+        Short messages which are not even close to English (e.g., messages formed from random byte strings) generally have negative scores, while the positive range seems to disambiguate well between short texts which are "almost English" (e.g., the decryption of a repeating-key XOR encryption with a key which differs in a small number of bytes from the true key) and perfect English. The optional keyword arguments don't seem to make a big difference in outcomes, but are occasionally useful for fine-tuning once it's clear what kind of text (spaced, case-differentiated, etc) we're looking for. 
 
     Caveats:
-        Since the score only depends on character frequency,
-        permuting a text doesn't change the score at all,
-        and a random sample from an English text (however 
-        unlike English it looks) should score about as well
-        as the full text. (We'll use this fact to our advantage
-        in cryptopals challenge 6!) 
+        Since the score only depends on character frequency, permuting a text doesn't change the score at all, and a random sample from an English text (however unlike English it looks) should score about as well as the full text. (We'll use this fact to our advantage in cryptopals challenge 6!) 
 
-        May not behave as expected on English texts with an
-        unusual amount of punctuation, special characters, 
-        or whitespace. Probably doesn't differentiate well
-        between English and related human languages. 
+        The score may not behave as expected on English texts with an unusual amount of punctuation, special characters, or whitespace. It probably doesn't differentiate well between English and related human languages. 
     
     Args:
-        msg (string): the string which is to be scored.
+        msg (Message): a Message instance representing the text to be scored.
         
-        case (boolean): True if priority should be given
-        to case-differentiated English text, False to ignore
-        case when scoring.
+        case (bool): True if priority should be given to case-differentiated English text, False to ignore case when scoring.
 
-        space (boolean): True if priority should be given
-        to text with a frequency of space characters similar
-        to that of typical English, False to ignore spaces when
-        scoring. 
+        space (bool): True if priority should be given to text with a frequency of space characters similar to that of typical English, False to ignore spaces when scoring. 
 
     Returns:
-        float: a score in the range [-1, 1] (including
-        endpoints).
+        float: a score in the range [-1, 1] (inclusive).
     """
+    assert(len(msg) != 0), "Argument 'msg' must have positive length"
+    msg_bytes = msg.bytes
     score = 0
-    eng_chars = Message(ascii_letters + ' .,;?!-', 'ascii')
-    eng_most_freq = set(byt for byt in Message(b'etoai'))
+    eng_chars = bytes(ascii_letters + ' .,;?!-', 'utf-8')
+    eng_most_freq = set(byt for byt in b'etoai')
     if space:
-        eng_most_freq.add(Message(b' '))
+        eng_most_freq.add(b' ')
     else:
-        eng_most_freq.add(Message(b'n'))
-    eng_least_freq = set(byt for byt in Message(b'zqxjkv'))
+        eng_most_freq.add(b'n')
+    eng_least_freq = set(byt for byt in b'zqxjkv')
 
     counts = { byt: 0 for byt in eng_chars }
 
-    # count alpha chars and spaces
-    # decrement score for each nonalpha/space char
-    for byt in msg:
+    # count frequency in msg of each character in eng_chars
+    # decrement score for each character not in eng_chars
+    for byt in msg_bytes:
         if byt in eng_chars:
             counts[byt] += 1
         else:
@@ -97,12 +57,12 @@ def scoreText(msg, case=False, space=True):
         msg_most_freq = set(sort_counts[0:6])
         msg_least_freq = set(sort_counts[-6:])
     else: 
-        msg_most_freq = set([Message(char.bytes.lower()) for char in sort_counts[0:6]])
-        msg_least_freq = set([Message(char.bytes.lower()) for char in sort_counts[-6:]])
+        msg_most_freq = set([bytes([char]).lower() for char in sort_counts[0:6]])
+        msg_least_freq = set([bytes([char]).lower() for char in sort_counts[-6:]])
 
     pts_per_char = len(msg) / (len(eng_most_freq) + len(eng_least_freq))
     score += pts_per_char * (len(eng_most_freq & msg_most_freq) + len(eng_least_freq & msg_least_freq))
-    normalized_score = score / len(msg)
+    normalized_score = score / len(msg_bytes)
     return normalized_score
 
 def scanKeys(msg, case=True, space=True, verbose=False):
@@ -111,7 +71,7 @@ def scanKeys(msg, case=True, space=True, verbose=False):
 
     Algorithm:
         Given a string, scans through all ascii characters. For each such 
-        character, uses tools.repXOR to compute the XOR 
+        character, uses tools.repeatXOR to compute the XOR 
         of the input string with the key consisting of 
         the character times the length of the input string,
         and scores the result using tools.scoreText.
@@ -158,9 +118,9 @@ def scanKeys(msg, case=True, space=True, verbose=False):
     best_score, best_decryption = key_data[best_key]
 
     if verbose:
-         print("The best result is:\n\n\tKey:", best_key.ascii())
-         print("\tScore:", best_score)
-         print("\tDecryption: %s\n" % best_decryption.ascii())
+         print("The best result is:\n\n\tKey:{}".format(best_key.ascii()))
+         print("\tScore:{}".format(best_score))
+         print("\tDecryption: {}\n".format(best_decryption.ascii()))
     return best_score, best_key, best_decryption
 
 def guessKeySize(msg, lower=2, upper=41, segments=4, guesses=1, verbose=False):
@@ -231,7 +191,7 @@ def guessKeySize(msg, lower=2, upper=41, segments=4, guesses=1, verbose=False):
         # (unordered) in range [0, segments)
         pairs = [(j, k) for j in range(segments) for k in range(j)]
         # compute the normalized hamming distance for each pair
-        norm_dists = [hamDist(segs[pair[0]], segs[pair[1]]) / key_size for pair in pairs]
+        norm_dists = [hammingDistance(segs[pair[0]], segs[pair[1]]) / key_size for pair in pairs]
         # take the average distance of the pairs
         avg_norm_dist = sum(norm_dists) / len(pairs)
         key_dists[key_size] = avg_norm_dist
@@ -291,6 +251,6 @@ def guessRepXORKey(msg, key_size, case=True, space=True, verbose=False):
     key = Message(b''.join(char[1].bytes for char in key_chars))
     if verbose:
         print("The best key of length %d is: %s\n" % (key_size, repr(key.ascii())))
-        print("The decryption of the message with this key is:\n%s" % repXOR(msg, key).ascii())
+        print("The decryption of the message with this key is:\n%s" % repeatXOR(msg, key).ascii())
     return key
 
