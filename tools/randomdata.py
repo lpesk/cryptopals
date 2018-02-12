@@ -1,8 +1,21 @@
 from tools.message import Message
 
 from base64 import b16encode, b64encode
+from hypothesis.strategies import integers
 from random import randint, choice
 from string import printable
+
+# for now, constrain testing time by bounding length of test messages
+# TODO: look up the flag to hypothesis which specifies bounds from the command line
+min_msg_len = 0
+max_msg_len = 1000
+
+def bddIntegers(min_value=None, max_value=None):
+    if min_value is None:
+        min_value = min_msg_len
+    if max_value is None:
+        max_value = max_msg_len
+    return integers(min_value, max_value)
 
 def randBytes(min_len, max_len=None):
     if max_len is None:
