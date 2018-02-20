@@ -1,3 +1,4 @@
+
 from tools.freqanalysis import scoreText, scanKeys, guessKeySize, guessRepXORKey
 from tools.message import Message
 from tools.randomdata import bddIntegers, randMsg, randPrintableMsg

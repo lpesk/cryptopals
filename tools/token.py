@@ -27,10 +27,3 @@ class Token():
         cls.sep_key = sep_key
         cls.msg = msg
         return cls
-
-
-#data = OrderedDict([(Message(b'ema;il'), Message(b'ab;c@=d.com')), (Message(b'ui=d'), Message(b'4=00'))])
-#profile = Token(data, Message(b';'), Message(b'='))
-#print(profile.data, profile.msg)
-#profile_msg = Token.fromMsg(profile.msg, Message(b';'), Message(b'='))
-#print(profile_msg.data, profile_msg.msg)

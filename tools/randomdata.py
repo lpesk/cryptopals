@@ -6,7 +6,7 @@ from random import randint, choice
 from string import printable
 
 # for now, constrain testing time by bounding length of test messages
-# TODO: look up the flag to hypothesis which specifies bounds from the command line
+# TODO: improve testing time and/or limits on testing time
 min_msg_len = 0
 max_msg_len = 1000
 

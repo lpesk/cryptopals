@@ -35,6 +35,7 @@ def scoreText(msg, case=False, space=True):
     eng_most_freq = set(byt for byt in b'etoai')
     if space:
         eng_most_freq.add(b' ')
+
     else:
         eng_most_freq.add(b'n')
     eng_least_freq = set(byt for byt in b'zqxjkv')
@@ -66,46 +67,24 @@ def scoreText(msg, case=False, space=True):
     return normalized_score
 
 def scanKeys(msg, case=True, space=True, verbose=False):
-    """ Scans for the key used to encrypt an English text
-    using a single-character XOR cipher. 
+    """ Scans for the key used to encrypt an English text using a single-character XOR cipher. 
 
     Algorithm:
-        Given a string, scans through all ascii characters. For each such 
-        character, uses tools.repeatXOR to compute the XOR 
-        of the input string with the key consisting of 
-        the character times the length of the input string,
-        and scores the result using tools.scoreText.
-        Returns a tuple containing the highest observed score
-        and the corresponding key and decryption. 
+        Given a Message instance, scans through all byte values. For each byte value, uses tools.repeatXOR to compute the XOR of the input string with the key consisting of that byte times the length of the input message, and scores the result using tools.scoreText. Returns a tuple containing the highest observed score and the corresponding key and decryption. 
 
     Args:
-        msg (string): a string which is to be tested for 
-        the property of being a single-character XOR encryption
-        of an English text. 
+        msg (Message): a message which is to be tested for the property of being a single-character XOR encryption of an English text. 
 
-        msg_format (string): the encoding of the bytes 
-        represented by the string 'msg'. Options are 'ascii'
-        (default), 'hex', and 'base64'.
-
-        case (boolean): see docstring for tools.scoreText.
+        case (bool): see docstring for tools.scoreText.
         
-        space (boolean): see docstring for tools.scoreText.
+        space (bool): see docstring for tools.scoreText.
         
-        verbose (boolean): if True, function will print the
-        highest-scoring key and decryption; not if False.
+        verbose (bool): if True, print the highest-scoring key and decryption; not if False.
 
     Returns:
-        tuple (float, int, string): the first parameter is the
-        highest observed score, and the second parameter is  
-        the key (as an ascii value in range [32, 127]
-        inclusive) which produces a decryption achieving that
-        high score. The third parameter is that decryption. 
+        tuple (float, int, string): the first parameter is the highest observed score, and the second parameter is the key (as a Message instance of length 1) which produces a decryption achieving that high score. The third parameter is that decryption. 
 
-        Note that only one such tuple is returned, even if
-        several keys produce decryptions which achieve the
-        highest observed score. (In this case, the tuple
-        returned will be the one which comes first in
-        alphabetical order.)
+        Note that only one such tuple is returned, even if several keys produce decryptions which achieve the highest observed score. (In this case, the tuple returned will be the one which comes first in alphabetical order.)
     """
     key_data = { }
     for val in range(256):
@@ -124,60 +103,28 @@ def scanKeys(msg, case=True, space=True, verbose=False):
     return best_score, best_key, best_decryption
 
 def guessKeySize(msg, lower=2, upper=41, segments=4, guesses=1, verbose=False):
-    """ Given a string and assuming that the string is the 
-    encryption of an English text with repeating-key XOR, 
-    guess the length of the key. User can specify the range 
-    key lengths to test, and the number of guesses to return
-    (in order of likelihood).
+    """ Given a message and assuming that the message is the encryption of an English text with repeating-key XOR, guess the length of the key. User can specify the range of key lengths to test, and the number of guesses to return (in decreasing order of likelihood).
 
     Algorithm:
-        The algorithm is based on the observation that, on
-        average, pairs of strings of English text have a 
-        smaller Hamming distance than pairs of random strings.
-        Furthermore, XOR'ing both members of a pair of strings
-        with the same key preserves their Hamming distance.
+        The algorithm is based on the observation that, on average, pairs of messages representing English text have a smaller Hamming distance than pairs of random messages. Furthermore, XOR'ing both members of a pair of messages with the same key preserves their Hamming distance.
         
-        Given a possible key length, slice out a small 
-        number of segments of that length. The number of 
-        segments is specified by the user (with a tradeoff of 
-        time vs. accuracy), and the default number is 4. The 
-        average Hamming distance of all of the distinct pairs
-        of these segments is computed. This computation is 
-        repeated for all key lengths within the bounds 
-        specified by the user. The key length which produces 
-        the smallest average Hamming distance is returned as
-        the most likely key length.
+        Given a possible key length, slice out a small number of segments of that length. The number of segments is specified by the user (with a tradeoff of time vs. accuracy), and the default number is 4. The average Hamming distance of all of the distinct pairs of these segments is computed. This computation is repeated for all key lengths within the bounds specified by the user. The key length which produces the smallest average Hamming distance is returned as the most likely key length.
         
     Args:
-        msg (string): a string which we assume is the
-        encryption of an English text with repeating-key
-        XOR.
+        msg (Message): a message which we assume is the encryption of an English text using repeating-key XOR.
 
-        msg_format (string): the encoding of the bytes
-        represented by 'msg'. Options are 'ascii' (default),
-        'hex', and 'base64'.
+        lower (int): lower bound (inclusive) on the range of possible key sizes. Must be at least 1.
 
-        lower (int): lower bound (inclusive) on the range of
-        possible key sizes. Must be at least 1.
+        upper (int): upper bound (exclusive) on the range of possible key sizes. Must be greater than 'lower'.
 
-        upper (int): upper bound (exclusive) on the range of
-        possible key sizes. Must be greater than 'lower'.
+        segments (int): the number of segments for which the Hamming distance is compared.
 
-        segments (int): the number of segments for which the 
-        Hamming distance is compared.
+        guesses (int): the number of guesses to return, in decreasing order of likelihood. Must be a positive integer less than or equal to ('upper' - 'lower').
 
-        guesses (int): the number of guesses to return, in
-        decreasing order of likelihood. Must be a positive 
-        integer less than or equal to ('upper' - 'lower').
-
-        verbose (boolean): if True then a description of the
-        output is printed before returning; not if False.
+        verbose (boolean): if True then a description of the output is printed before returning; not if False.
 
     Returns:
-        list of ints: a list, of length is equal to 'guesses',
-        of the most likely keys, in decreasing order of
-        likelihood. Each key is an integer in range [32, 127]
-        inclusive. 
+        list of ints: a list, of length is equal to 'guesses', of the most likely keys, in decreasing order of likelihood. 
     """
     assert (lower > 0 and upper > lower), "Please enter a valid range of key sizes"
     assert (segments > 1), "Must use at least 2 segments"
@@ -206,44 +153,24 @@ def guessKeySize(msg, lower=2, upper=41, segments=4, guesses=1, verbose=False):
     return guess_list
 
 def guessRepXORKey(msg, key_size, case=True, space=True, verbose=False):
-    """ Given a string which is assumed to be the encryption 
-    of an English text using a repeating-key XOR cipher, and
-    given the length of the key, this function guesses the
-    most likely key.
+    """ Given a message which is assumed to be the encryption of an English text using a repeating-key XOR cipher, and given the length of the key, this function guesses the most likely key.
     
     Algorithm:
-        For each index i less than the length m of the key, 
-        the (n * m + i)-th bytes of the input string (where
-        n runs over the positive integers until the string is
-        exhausted) are collected into a new string. The i-th 
-        new string consists of all the bytes of the original
-        string which were encrypted by XOR'ing with the i-th
-        byte of the repeating key. Each of the m new  strings
-        is now treated as a single-character-XOR decryption
-        problem, which is solved by calling tools.scanKeys.
-        The resulting m single-character keys are then pieced
-        together to form the repeating key. 
+        For each index i less than the length m of the key, the (n * m + i)-th bytes of the input message (where n runs over the positive integers until the string is exhausted) are collected into a new message. The i-th new string consists of all the bytes of the original message which were encrypted by XOR'ing with the i-th byte of the repeating key. Each of the m new messages is now treated as a single-character-XOR decryption problem, which is solved by calling freqanalysis.scanKeys. The resulting m single-character keys are then pieced together to form the repeating key. 
 
     Args:
-        msg (string): the string which is to be decrypted.
+        msg (Message): the message which is to be decrypted.
         
         key_size (int): the length of the repeating key.
 
-        msg_format (string): the format in which the bytes
-        represented by 'msg' are encoded. Options are 'ascii'
-        (default), 'hex', and 'base64'.
+        case (bool): see the docstring for freqanalysis.scoreText.
 
-        case (boolean): see the docstring for tools.scoreText.
+        space (bool): see the docstring for freqanalysis.scoreText.
 
-        space (boolean): see the docstring for tools.scoreText.
-
-        verbose (boolean): prints decryption of 'msg' with most
-        likely key before returning if True, not if False
-        (default).
+        verbose (bool): prints decryption of 'msg' with most likely key before returning if True, not if False (default).
 
     Returns:
-        string: the repeating-XOR key of length 'key_size'
-        which was most likely used to encrypt the input string.
+        Message: the repeating-XOR key of length 'key_size' which was most likely used to encrypt the input message.
     """
     indices = [[i for i in range(len(msg)) if i % key_size == j] for j in range(key_size)]
     blocks = [Message(b''.join(msg[i].bytes for i in indices[j])) for j in range(key_size)]

@@ -30,26 +30,26 @@ class BadPad(Exception):
         Exception.__init__(self, "Incorrect padding")
 
 def _decode(msg, msg_format, end='big'):
-    """ Convert a ascii-, binary-, hex-, or base64-encoded
-    string into a byte string.
+    """ Form a big-endian byte string from one of the following representations: an ascii-, base64-, binary-, hex-, or base64-encoded string, a nonnegative integer, or a byte string (in the last case no operation is done except possibly to reverse endianness).
 
     Args:
-        msg (string): a string representing a series
-        of bytes in either ascii, hex, or base64 
-        encoding.
+        msg (string): a representation of a sequence of bytes.
 
-        msg_format (string): the encoding of the bytes
-        represented by 'msg'. Options are 'bytes', 'ascii',
-        'bin', 'hex', and 'base64'.
+        msg_format (string): the encoding of the bytes represented by 'msg'. Options are the members of the list 'valid_formats': 'bytes', 'ascii', 'base64', 'bin', 'hex', and 'int'. 
+
+        end (string): the endianness of the representation of the bytes in 'msg'. Options are the members of the list 'valid_ends': big' (default) and 'little'.
 
     Returns:
-    # TODO: is this definitely a bytes and not a bytearray?
-        bytes: a byte string containing the bytes
-        represented by 'msg'. 
+        bytes: a byte string containing the bytes represented by 'msg'. 
 
     Raises:
-        InvalidFormat: if 'msg_format' is nonempty 
-        and not in 'valid_formats'.
+        InvalidFormat: if 'msg_format' is nonempty and not in 'valid_formats'.
+
+        InvalidEndian: if 'end' is not in 'valid_ends'. 
+
+        Exception, "Argument 'msg' cannot be interpreted as an integer": if a non-integer type is passed as 'msg' while 'int' is passed as 'msg_format'.
+
+        Exception, "Argument 'msg' must be a nonnegative integer": if a negative integer is passed as 'msg' while 'int' is passed as 'msg_format'.
     """
     if msg_format not in valid_formats:
         raise InvalidFormat
@@ -92,25 +92,26 @@ def _decode(msg, msg_format, end='big'):
     return msg_bytes
 
 def _encode(msg_bytes, out_format, end='big'):
-    """ Convert a byte array into an ascii-, binary-, hex-, or 
-    base64-encoded string.
+    """ Convert a big-endian byte string into any of the following forms: an ascii-, base64-, binary-, or hex-encoded string, a nonnegative integer, or a byte string (in the last case no operation is done except to possibly reverse the endianness).
 
     Args:
-        msg_bytes (bytes): the byte array to be
-        converted.
+        msg_bytes (bytes): the byte string to be encoded.
 
-        out_format (string): the desired encoding of
-        the bytes of 'msg_bytes' in the output string. 
-        Options are 'ascii', 'bin', hex', and 
-        'base64'.
+        out_format (string): the desired encoding of the bytes of 'msg_bytes' in the output. Options are the members of 'valid_formats': 'ascii', 'base64', 'bin', 'bytes', 'hex', and 'int'. 
+
+        end (string): the desired endianness of the encoded representation of 'msg_bytes'. Options are the members of 'valid_ends': 'big' (default) and 'little'. 
 
     Returns:
-        string: string representing the bytes of 
-        'msg_bytes', with encoding 'out_format'. 
+        string (if 'out_format' is 'ascii', 'base64', 'bin', or 'hex'): string representing the bytes of 'msg_bytes', with encoding 'out_format' and endianness 'end'.
+        
+        bytes (if 'out_format' is 'bytes'): byte string representing the bytes of 'msg_bytes' with endianness 'end'.
+
+        int (if 'out_format' is 'int'): integer representing the bytes of 'msg_bytes' with endianness 'end'.
  
     Raises:
-        InvalidFormat: if 'msg_format' is nonempty 
-        and not equal to 'ascii', 'bin', 'hex', or 'base64'. 
+        InvalidFormat: if 'out_format' is nonempty and not in 'valid_formats'.
+
+        InvalidEndian: if 'end' is not in 'valid_ends'.
     """
     if out_format not in valid_formats:
         raise InvalidFormat
@@ -144,6 +145,12 @@ def _encode(msg_bytes, out_format, end='big'):
 
         
 class Message():
+    """ A wrapper class for the bytes type. Supports construction from any of the following formats: bytes, int (positive only), and ascii-, base64-, binary-, or hex-encoded string. Class methods also support encoding of a Message instance in any of these formats. Both big- and little-endian representations are supported.
+
+    Special methods provide support for hashing, slicing, addition, and scalar multiplication. Slices (including slices of size 1) are again Message instances.
+
+    Class methods support padding and pad-stripping/validation according to the PKCS#7 standard and a variant.
+    """
     def __init__(self, msg, msg_format='bytes', end='big'):
         if msg_format not in valid_formats:
             raise InvalidFormat
@@ -217,6 +224,24 @@ class Message():
         return _encode(self.bytes, 'base64', end)
         
     def pad(self, block_size=16, strict=True):
+        """
+        Apply padding to self.bytes in order to increase len(self) to a multiple of the positive integer 'block_size'. The padding bytes are each equal to the length of the pad.
+
+        When keyword argument 'strict' is True, the behavior of 'pad' is consistent with the PKCS#7 standard. 
+
+        Args:
+            self (Message): the Message instance to be padded.
+
+            block_size (int): the positive integer which should evenly divide the length of the padded message. Must be in [1, 255] inclusive; default value is 16.
+
+            strict (bool): If keyword argument 'strict' is True, apply a full block of padding when len(self) is already a multiple of 'block_size'. If 'strict' is False, only apply padding when len(self) is not a multiple of 'block_size'. 
+
+        Returns:
+            Message: the Message instance 'self', modified in place to add any padding. 
+
+        Raises:
+            AssertionError: if 'block_size' is nonpositive or greater than 255.
+        """
         assert (0 < block_size and block_size < 256), "Block size must be an integer in [1, 255] inclusive"
         if len(self) % block_size == 0:
             if strict:
@@ -231,6 +256,28 @@ class Message():
         return self
 
     def stripPad(self, block_size=16, strict=True):
+        """
+        Detect and remove padding from Message instances. The expected padding scheme is that provided by message.pad.
+
+        When keyword argument 'strict' is True, behavior of 'stripPad' is consistent with the PKCS#7 padding standard.
+
+        Args:
+            self (Message): the Message instance to be de-padded.
+
+            block_size (int): the upper bound (inclusive if 'strict' is True, exclusive otherwise) on the length of the pad.
+
+            strict (bool): if True, detect and remove padding produced by the function message.pad with keyword argument 'strict' == True; otherwise detect and remove padding produced by message.pad with 'strict' == False.
+
+        Returns:
+            Message: the Message instance 'self', modified in place to remove any padding.
+
+        Raises:
+            AssertionError, "Message must be nonempty": if an empty message is passed as 'self'.
+            
+            AssertionError, "Block size must be an integer in [1, 255] inclusive": if an out-of-range integer is passed as 'block_size'.
+
+            BadPad: if keyword argument 'strict' is True and argument 'self' does not have valid PKCS#7 padding. 
+        """
         assert (self != Message(b'')), "Message must be nonempty"
         assert (0 < block_size and block_size < 256), "Block size must be an integer in [1, 255] inclusive"
         poss_pad_size = int(self.bytes[-1])
@@ -251,6 +298,16 @@ class Message():
             return self
 
     def validatePad(self, block_size=16):
+        """ Decide whether a Message instance has been padded to a specified block size according to the PKCS#7 standard. If so, strip off the padding and return True; if not, return False.
+
+        Args:
+            self (Message): the Message instance whose padding is to be validated and stripped.
+
+            block_size (int): the block size which is expected to divide the padded length of 'self'. Must be a positive integer less than 256; default value is 16.
+
+        Returns:
+            bool: True if 'self' had valid PKCS#7 padding to a multiple of 'block_size', False if not. When True is returned, padding is also stripped in place from 'self'.
+        """
         try:
             self.stripPad()
             return True
@@ -258,30 +315,50 @@ class Message():
             return False        
 
     def validateAscii(self):
+        """
+        Given a message, return True if all bytes of the message have ascii values in the range [0, 127] inclusive, and False otherwise.
+
+        Args:
+            self (Message): the Message instance whose bytes are to be validated.
+
+        Returns:
+            bool: True if all bytes of 'self.bytes' are in range [0, 127] inclusive; False otherwise.
+        """
         for byt in self.bytes:
             if byt >= 127:
                 return False
         return True
         
     def eatChars(self, char_list):
-        """ Given a message and a list of characters, adds quotes
-        around all occurances of those characters in the message.
+        """ Given a Message and a list of bytes, remove all occurances of the specified bytes from the message.
 
         Args: 
-        msg (string): the message to be modified.
+            self (Message): the message to be modified.
 
-        char_list (list of chars): a list of all characters
-        to be quoted out in 'msg'.
+            char_list (list of bytes): a list of all bytes to be removed from 'self.bytes'.
 
         Returns:
-        string: the modification of 'msg' which has quotes
-        around every character in 'char_list'.
+            Message: the modification in place of 'self' to remove all specified bytes from 'self.bytes'.
         """
         for msg_byt in char_list:
             self.bytes = self.bytes.replace(msg_byt.bytes, b'')
         return self
     
 def listBlocks(msg, block_size=16):
+    """
+    Given a Message instance and a block size, divide the message into a list of messages of size 'block_size' (except possibly the last message, which may be shorter).
+
+    Args:
+        msg (Message): the message to be split into blocks.
+
+        block_size (int): the desired length of the blocks. Must be an integer in range [1, 255] inclusive.
+
+    Returns:
+        list of Message instances: a list of the blocks of size 'block_size' formed from 'msg'.
+
+    Raises:
+        AssertionError, "Block size must be an integer in range [1, 255] inclusive": if an invalid 'block_size' is passed.
+    """
     assert (0 < block_size and block_size < 256), "Block size must be an integer in range [1, 255] inclusive"
     num_blocks = int(len(msg)/block_size)
     blocks = [Message(msg.bytes[block_size * i: block_size * (i+1)]) for i in range(num_blocks)]
@@ -290,6 +367,15 @@ def listBlocks(msg, block_size=16):
     return blocks
 
 def joinBlocks(msg_blocks):
+    """
+    Given a list of Message instances, concatentate them to form a single Message instance.
+
+    Args:
+        msg_blocks (list of Message instances): the Message instances to be concatenated.
+
+    Returns:
+        Message: the concatenation of the messages in the list 'msg_blocks'. 
+    """
     msg = Message(b'')
     for block in msg_blocks:
         msg.bytes += block.bytes

@@ -105,18 +105,11 @@ def ECBOracle(msg):
     random 16-byte key.
 
     Args:
-        msg (string): the message to be concatenated with 
+        msg (Message): the message to be concatenated with 
         the bytes of tools.postfix1 and then encrypted.
 
-        msg_format (string): the format in which the bytes
-        of 'msg' are encoded. Options are 'ascii'     
-        (default), 'hex', and 'base64'.
-
     Returns: 
-        string: The ascii-encoded encryption of the
-        concatenation of 'msg' with the bytes of
-        tools.postfix, using AES-ECB under a fixed 
-        random 16-byte key.
+        Message: The  encryption of the concatenation of 'msg' with the bytes of tools.postfix, using AES-ECB under a fixed random 16-byte key.
     """
     prefix = rand_prefix
     postfix_str = 'Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK'
